@@ -3,9 +3,9 @@
   "id": "FCPercentage",
   "name": "FCPercentage",
   "author": "ChirpyMisha",
-  "version": "1.4.9",
+  "version": "1.5.0",
   "description": "A Beat Saber mod to help you practice your accuracy by showing your percentage as if you had a full combo!",
-  "gameVersion": "1.38.0",
+  "gameVersion": "1.45.0",
   "dependsOn": {
     "BSIPA": "^4.3.5",
     "BeatSaberMarkupLanguage": "^1.12.1",
