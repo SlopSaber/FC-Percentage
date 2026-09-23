@@ -67,16 +67,16 @@
     <Delete Files="@(OldZips)" TreatErrorsAsWarnings="true" ContinueOnError="true" />
     <ZipDir SourceDirectory="$(ArtifactDestination)" DestinationFile="$(DestinationDirectory)$(ArtifactName).zip" />
   </Target>
-  <!--Copies the assembly and pdb to the Beat Saber folder.-->
+  <!--Copies the assembly to the Beat Saber folder.-->
   <Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(DisableCopyToPlugins)' != 'True' AND '$(ContinuousIntegrationBuild)' != 'True'">
     <PropertyGroup>
-      <PluginDir>$(BeatSaberDir)\Plugins</PluginDir>
+      <PluginDir>$(GameDirectory)\Plugins</PluginDir>
       <CanCopyToPlugins>True</CanCopyToPlugins>
       <CopyToPluginsError Condition="!Exists('$(PluginDir)')">Unable to copy assembly to game folder, did you set 'BeatSaberDir' correctly in your 'csproj.user' file? Plugins folder doesn't exist: '$(PluginDir)'.</CopyToPluginsError>
       <!--Error if 'BeatSaberDir' does not have 'Beat Saber.exe'-->
-      <CopyToPluginsError Condition="!Exists('$(BeatSaberDir)\Beat Saber.exe')">Unable to copy to Plugins folder, '$(BeatSaberDir)' does not appear to be a Beat Saber game install.</CopyToPluginsError>
+      <CopyToPluginsError Condition="!Exists('$(GameDirectory)\Beat Saber.exe')">Unable to copy to Plugins folder, '$(GameDirectory)' does not appear to be a Beat Saber game install.</CopyToPluginsError>
       <!--Error if 'BeatSaberDir' is the same as 'LocalRefsDir'-->
-      <CopyToPluginsError Condition="'$(BeatSaberDir)' == '$(LocalRefsDir)' OR '$(BeatSaberDir)' == ''">Unable to copy to Plugins folder, 'BeatSaberDir' has not been set in your 'csproj.user' file.</CopyToPluginsError>
+      <CopyToPluginsError Condition="'$(GameDirectory)' == '$(LocalRefsDir)' OR '$(GameDirectory)' == ''">Unable to copy to Plugins folder, 'BeatSaberDir' has not been set in your 'csproj.user' file.</CopyToPluginsError>
       <CanCopyToPlugins Condition="'$(CopyToPluginsError)' != ''">False</CanCopyToPlugins>
     </PropertyGroup>
     <!--Check if Beat Saber is running-->
@@ -85,12 +85,11 @@
     </IsProcessRunning>
     <PropertyGroup>
       <!--If Beat Saber is running, output to the Pending folder-->
-      <PluginDir Condition="'$(IsRunning)' == 'True'">$(BeatSaberDir)\IPA\Pending\Plugins</PluginDir>
+      <PluginDir Condition="'$(IsRunning)' == 'True'">$(GameDirectory)\IPA\Pending\Plugins</PluginDir>
     </PropertyGroup>
     <Warning Text="$(CopyToPluginsError)" Condition="'$(CopyToPluginsError)' != ''" />
     <Message Text="Copying '$(OutputAssemblyName).dll' to '$(PluginDir)'." Importance="high" Condition="$(CanCopyToPlugins)" />
     <Copy SourceFiles="$(OutputAssemblyName).dll" DestinationFiles="$(PluginDir)\$(AssemblyName).dll" Condition="$(CanCopyToPlugins)"  />
-    <Copy SourceFiles="$(OutputAssemblyName).pdb" DestinationFiles="$(PluginDir)\$(AssemblyName).pdb" Condition="'$(CanCopyToPlugins)' == 'True' AND Exists('$(OutputAssemblyName).pdb')"  />
     <Warning Text="Beat Saber is running, restart the game to use the latest build." Condition="'$(IsRunning)' == 'True'" />
   </Target>
 </Project>
