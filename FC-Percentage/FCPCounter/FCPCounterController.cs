@@ -111,11 +111,13 @@ namespace FCPercentage.FCPCounter
 
 		private void RefreshCounterText()
 		{
-			counterPercentageText.text = percentagePrefix;
+			string text = percentagePrefix;
 			if (config.PercentageMode == CounterPercentageModes.Total || config.PercentageMode == CounterPercentageModes.TotalAndSplit)
-				counterPercentageText.text += GetPercentageTotalStringFormatted();
+				text += GetPercentageTotalStringFormatted();
 			if (config.PercentageMode == CounterPercentageModes.Split || config.PercentageMode == CounterPercentageModes.TotalAndSplit)
-				counterPercentageText.text += GetPercentageSplitStringFormatted();
+				text += GetPercentageSplitStringFormatted();
+			if (counterPercentageText.text != text)
+				counterPercentageText.text = text;
 		}
 
 		private string GetPercentageTotalStringFormatted()

@@ -72,7 +72,7 @@
     </Reference>
     <Reference Include="Counters+, Version=2.2.2.0, Culture=neutral, processorArchitecture=MSIL">
       <Private>False</Private>
-      <HintPath>..\..\CountersPlus\Counters+\bin\Release\Counters+.dll</HintPath>
+      <HintPath>$(GameDirectory)\Plugins\Counters+.dll</HintPath>
       <SpecificVersion>False</SpecificVersion>
     </Reference>
     <Reference Include="DataModels">
