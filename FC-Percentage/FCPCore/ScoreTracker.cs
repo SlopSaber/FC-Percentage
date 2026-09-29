@@ -9,7 +9,7 @@ using SiraUtil.Logging;
 
 namespace FCPercentage.FCPCore
 {
-	public class ScoreTracker : IInitializable, IDisposable, ICutScoreBufferDidChangeReceiver, ICutScoreBufferDidFinishReceiver
+	public class ScoreTracker : IInitializable, IDisposable, ICutScoreBufferDidFinishReceiver
 	{
 		private readonly SiraLog logger;
 		[InjectOptional] private GameplayCoreSceneSetupData sceneSetupData = null!;
@@ -18,14 +18,9 @@ namespace FCPercentage.FCPCore
 		private readonly ScoreManager scoreManager;
 		private readonly ComboController comboController;
 
-		private Dictionary<CutScoreBuffer, int> CutScoreBufferNoteCount;
-
-		private static readonly Func<int, int> MultiplierAtNoteCount = noteCount => noteCount > 13 ? OptimiseGetMultiplier() : (noteCount > 5 ? 4 : (noteCount > 1 ? 2 : 1));
-		private static readonly Func<int, int> MultiplierAtMax = noteCount => 8;
-		private static Func<int, int> GetMultiplier = x => 69; // Assign something random to stop compiler complaining ¯\_(ツ)_/¯
-		private static int OptimiseGetMultiplier() { GetMultiplier = MultiplierAtMax; return 8; }
-
-		private int noteCount;
+		private readonly Dictionary<CutScoreBuffer, PendingScoreEvent> CutScoreBufferPendingScoreEvent;
+		private readonly List<PendingScoreEvent> pendingScoreEvents;
+		private int pendingScoreEventIndex;
 
 		private PlayerLevelStatsData GetPlayerLevelStatsData(PlayerDataModel playerDataModel, BeatmapKey beatmap) => playerDataModel.playerData.TryGetPlayerLevelStatsData(beatmap);
 
@@ -36,8 +31,9 @@ namespace FCPercentage.FCPCore
 			this.scoreController = scoreController;
 			this.comboController = comboController;
 
-			CutScoreBufferNoteCount = new Dictionary<CutScoreBuffer, int>();
-			noteCount = 0;
+			CutScoreBufferPendingScoreEvent = new Dictionary<CutScoreBuffer, PendingScoreEvent>();
+			pendingScoreEvents = new List<PendingScoreEvent>();
+			pendingScoreEventIndex = 0;
 		}
 
 		private void ComboController_comboBreakingEventHappenedEvent() => scoreManager.BreakCombo();
@@ -54,12 +50,11 @@ namespace FCPercentage.FCPCore
 				return;
 			scoreManager.ResetScoreManager(stats, sceneSetupData.transformedBeatmapData, sceneSetupData.colorScheme);
 
-			// Set function for multiplier according to setting
-			GetMultiplier = PluginConfig.Instance.IgnoreMultiplier ? MultiplierAtMax : MultiplierAtNoteCount;
-
 			// Assign events
 			if (scoreController != null)
+			{
 				scoreController.scoringForNoteStartedEvent += ScoreController_scoringForNoteStartedEvent;
+			}
 			if (comboController != null)
 				comboController.comboBreakingEventHappenedEvent += ComboController_comboBreakingEventHappenedEvent;
 		}
@@ -68,7 +63,9 @@ namespace FCPercentage.FCPCore
 		{
 			// Unassign events
 			if (scoreController != null)
+			{
 				scoreController.scoringForNoteStartedEvent -= ScoreController_scoringForNoteStartedEvent;
+			}
 			if (comboController != null)
 				comboController.comboBreakingEventHappenedEvent -= ComboController_comboBreakingEventHappenedEvent;
 		}
@@ -78,74 +75,92 @@ namespace FCPercentage.FCPCore
 			// Ignore bombs
 			if (IsBomb(scoringElement))
 				return;
-			
-			// And ignore bad cuts. But do count them for proper application of the multiplier
-			noteCount++;
+
+			int multiplier = GetFcMultiplier(scoringElement);
 			//logger.Notice($"noteCount[{noteCount}]");
 			if (scoringElement is GoodCutScoringElement goodCutScoringElement)
 			{
-				// Track cut data
 				CutScoreBuffer cutScoreBuffer = (CutScoreBuffer)goodCutScoringElement.cutScoreBuffer;
+				PendingScoreEvent pendingScoreEvent = new PendingScoreEvent(scoringElement.time, pendingScoreEventIndex++, scoringElement.noteData.colorType, goodCutScoringElement.maxPossibleCutScore, multiplier);
+				pendingScoreEvents.Add(pendingScoreEvent);
 
-				// Add provisional score assuming it'll be a full swing to make it feel more responsive even though it may be temporarily incorrect
 				if (goodCutScoringElement.isFinished)
-					scoreManager.AddScore(goodCutScoringElement.noteData.colorType, cutScoreBuffer.cutScore, goodCutScoringElement.maxPossibleCutScore, GetMultiplier(noteCount));
+					pendingScoreEvent.Score = cutScoreBuffer.cutScore;
 				else
-					scoreManager.AddScore(goodCutScoringElement.noteData.colorType, MaxPotentialScore(cutScoreBuffer), goodCutScoringElement.maxPossibleCutScore, GetMultiplier(noteCount));
-
-				if (!cutScoreBuffer.isFinished) 
 				{
-					CutScoreBufferNoteCount.Add(cutScoreBuffer, noteCount);
-					goodCutScoringElement.cutScoreBuffer.RegisterDidChangeReceiver(this);
+					CutScoreBufferPendingScoreEvent[cutScoreBuffer] = pendingScoreEvent;
 					goodCutScoringElement.cutScoreBuffer.RegisterDidFinishReceiver(this);
 				}
 			}
-		}
+			else if (IsScoreableColorNote(scoringElement.noteData))
+			{
+				pendingScoreEvents.Add(new PendingScoreEvent(scoringElement.time, pendingScoreEventIndex++, scoringElement.noteData.colorType, scoringElement.maxPossibleCutScore, multiplier, true));
+			}
 
-		public void HandleCutScoreBufferDidChange(CutScoreBuffer cutScoreBuffer)
-		{
-			if (!IsCutMaxPotentialScore(cutScoreBuffer))
-				return;
-
-			// Score has already been added during the scoringForNoteStartedEvent. So no further action is required for this note.
-			cutScoreBuffer.UnregisterDidChangeReceiver(this);
-			cutScoreBuffer.UnregisterDidFinishReceiver(this);
-
-			if (CutScoreBufferNoteCount.ContainsKey(cutScoreBuffer))
-				CutScoreBufferNoteCount.Remove(cutScoreBuffer);
+			ProcessPendingScoreEvents();
 		}
 
 		public void HandleCutScoreBufferDidFinish(CutScoreBuffer cutScoreBuffer)
 		{
-			if (CutScoreBufferNoteCount.TryGetValue(cutScoreBuffer, out int noteCount))
+			if (CutScoreBufferPendingScoreEvent.TryGetValue(cutScoreBuffer, out PendingScoreEvent pendingScoreEvent))
 			{
-				int diffAngleCutScore;
-				if ((diffAngleCutScore = DifferenceFromProvisionalScore(cutScoreBuffer)) > 0)
-					scoreManager.SubtractScore(GetColorType(cutScoreBuffer), diffAngleCutScore, GetMultiplier(noteCount));
-
-				CutScoreBufferNoteCount.Remove(cutScoreBuffer);
+				pendingScoreEvent.Score = cutScoreBuffer.cutScore;
+				CutScoreBufferPendingScoreEvent.Remove(cutScoreBuffer);
+				ProcessPendingScoreEvents();
 			}
 			else
-				logger.Error("HandleCutScoreBufferDidChange: Unable to get noteCount from CutScoreBufferNoteCount!");
-			cutScoreBuffer.UnregisterDidChangeReceiver(this);
+				logger.Error("HandleCutScoreBufferDidFinish: Unable to get pending score event from CutScoreBufferPendingScoreEvent!");
+
 			cutScoreBuffer.UnregisterDidFinishReceiver(this);
 		}
 
-		private int DifferenceFromProvisionalScore(CutScoreBuffer cutScoreBuffer)
+		private void ProcessPendingScoreEvents()
 		{
-			int maxAngleCutScore = cutScoreBuffer.noteScoreDefinition.maxBeforeCutScore + cutScoreBuffer.noteScoreDefinition.maxAfterCutScore;
-			int ratingAngleCutScore = cutScoreBuffer.beforeCutScore + cutScoreBuffer.afterCutScore;
+			pendingScoreEvents.Sort((x, y) =>
+			{
+				int timeCompare = x.Time.CompareTo(y.Time);
+				return timeCompare != 0 ? timeCompare : x.Index.CompareTo(y.Index);
+			});
 
-			return maxAngleCutScore - ratingAngleCutScore;
+			while (pendingScoreEvents.Count > 0 && pendingScoreEvents[0].CanProcess)
+			{
+				PendingScoreEvent pendingScoreEvent = pendingScoreEvents[0];
+				pendingScoreEvents.RemoveAt(0);
+
+				if (pendingScoreEvent.EstimateAtCurrentPercentage)
+					scoreManager.AddEstimatedScoreAtCurrentPercentage(pendingScoreEvent.ColorType, pendingScoreEvent.MaxScore, pendingScoreEvent.Multiplier);
+				else if (pendingScoreEvent.Score.HasValue)
+					scoreManager.AddScore(pendingScoreEvent.ColorType, pendingScoreEvent.Score.Value, pendingScoreEvent.MaxScore, pendingScoreEvent.Multiplier);
+			}
 		}
 
-		private ColorType GetColorType(CutScoreBuffer cutScoreBuffer) => cutScoreBuffer.noteCutInfo.noteData.colorType;
-
-		private bool IsCutMaxPotentialScore(CutScoreBuffer cutScoreBuffer) => cutScoreBuffer.cutScore == MaxPotentialScore(cutScoreBuffer);
-		private int MaxPotentialScore(CutScoreBuffer cutScoreBuffer) => cutScoreBuffer.maxPossibleCutScore - MissedCenterDistanceCutScore(cutScoreBuffer);
-		private int MissedCenterDistanceCutScore(CutScoreBuffer cutScoreBuffer) => cutScoreBuffer.noteScoreDefinition.maxCenterDistanceCutScore - cutScoreBuffer.centerDistanceCutScore;
+		private int GetFcMultiplier(ScoringElement scoringElement) => PluginConfig.Instance.IgnoreMultiplier ? 8 : scoringElement.maxMultiplier;
 
 		private bool IsBomb(ScoringElement scoringElement) => IsBomb(scoringElement.noteData);
 		private bool IsBomb(NoteData noteData) => noteData.gameplayType == GameplayType.Bomb;
+		private bool IsScoreableColorNote(NoteData noteData) => noteData.colorType == ColorType.ColorA || noteData.colorType == ColorType.ColorB;
+
+		private class PendingScoreEvent
+		{
+			internal readonly float Time;
+			internal readonly int Index;
+			internal readonly ColorType ColorType;
+			internal readonly int MaxScore;
+			internal readonly int Multiplier;
+			internal readonly bool EstimateAtCurrentPercentage;
+			internal int? Score;
+
+			internal bool CanProcess => EstimateAtCurrentPercentage || Score.HasValue;
+
+			internal PendingScoreEvent(float time, int index, ColorType colorType, int maxScore, int multiplier, bool estimateAtCurrentPercentage = false)
+			{
+				Time = time;
+				Index = index;
+				ColorType = colorType;
+				MaxScore = maxScore;
+				Multiplier = multiplier;
+				EstimateAtCurrentPercentage = estimateAtCurrentPercentage;
+			}
+		}
 	}
 }

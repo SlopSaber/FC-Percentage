@@ -126,6 +126,12 @@ namespace FCPercentage.FCPCore
 			InvokeScoreUpdate();
 		}
 
+		internal void AddEstimatedScoreAtCurrentPercentage(ColorType colorType, int maxScore, int multiplier)
+		{
+			int score = (int)Math.Round(CalculateRatio(ScoreTotal, MaxScoreTotal) * maxScore);
+			AddScore(colorType, score, maxScore, multiplier);
+		}
+
 		internal void SubtractScore(ColorType colorType, int score, int multiplier)
 		{
 			SubtractScore(colorType, score, 0, multiplier);
