@@ -2,6 +2,7 @@
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <GameDirectory>D:\BSManager\BSInstances\1.45.1</GameDirectory>
+    <CountersPlusPath Condition="'$(CountersPlusPath)' == ''">$(GameDirectory)\Plugins\Counters+.dll</CountersPlusPath>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
@@ -70,9 +71,9 @@
       <HintPath>$(GameDirectory)\Beat Saber_Data\Managed\Colors.dll</HintPath>
       <SpecificVersion>False</SpecificVersion>
     </Reference>
-    <Reference Include="Counters+, Version=2.2.2.0, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="$(CountersPlusPath)">
       <Private>False</Private>
-      <HintPath>$(GameDirectory)\Plugins\Counters+.dll</HintPath>
+      <HintPath>$(CountersPlusPath)</HintPath>
       <SpecificVersion>False</SpecificVersion>
     </Reference>
     <Reference Include="DataModels">
@@ -162,6 +163,7 @@
     <Compile Include="FCPResults\HUD\FCPMissionResultsViewController.cs" />
     <Compile Include="FCPResults\HUD\FCPResultsViewController.cs" />
     <Compile Include="FCPCore\ScoreTracker.cs" />
+    <Compile Include="FCPCounter\FCPercentageCounterPreview.cs" />
     <Compile Include="FCPResults\HUD\ResultsController.cs" />
     <Compile Include="FCPResults\CalculationModels\UpdatedHighscoreDiffCalculationModel.cs" />
     <Compile Include="FCPResults\CalculationModels\OldHighscoreDiffCalculationModel.cs" />

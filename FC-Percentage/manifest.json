@@ -19,6 +19,7 @@
     "CountersPlus.CustomCounter": {
       "Name": "FC Percentage",
       "CounterLocation": "FCPercentage.FCPCounter.FCPCounterController",
+      "PreviewLocation": "FCPercentage.FCPCounter.FCPercentageCounterPreview",
       "ConfigDefaults": {
         "Enabled": true,
         "Position": "BelowMultiplier",
