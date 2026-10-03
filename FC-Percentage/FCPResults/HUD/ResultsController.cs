@@ -8,7 +8,9 @@ using FCPercentage.FCPResults.Configuration;
 using HMUI;
 using SiraUtil.Logging;
 using System;
+using System.Collections;
 using System.Reflection;
+using System.Xml.Linq;
 using TMPro;
 using UnityEngine;
 using Zenject;
@@ -36,6 +38,9 @@ namespace FCPercentage.FCPResults.HUD
 		internal abstract ResultsTextFormattingModel textModel { get; set; }
 		internal LevelCompletionResults levelCompletionResults = null!;
 		internal ViewController resultsViewController;
+		private Coroutine? pendingPublication;
+		private int publicationRevision;
+		private bool disposed;
 
 		// Checks if the result should be shown
 		private bool IsActiveOnResultsView(ResultsViewModes mode) => mode == ResultsViewModes.On ||
@@ -56,24 +61,84 @@ namespace FCPercentage.FCPResults.HUD
 		public void Initialize()
 		{
 			if (resultsViewController != null)
+			{
 				resultsViewController.didActivateEvent += ResultsViewController_OnActivateEvent;
+				resultsViewController.didDeactivateEvent += ResultsViewController_OnDeactivateEvent;
+			}
 		}
 
 		public void Dispose()
 		{
+			disposed = true;
+			RetirePublication();
 			if (resultsViewController != null)
+			{
 				resultsViewController.didActivateEvent -= ResultsViewController_OnActivateEvent;
+				resultsViewController.didDeactivateEvent -= ResultsViewController_OnDeactivateEvent;
+			}
 		}
 
 		internal void ResultsViewController_OnActivateEvent(bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)
 		{
+			RetirePublication();
 			LevelCompletionResults? levelCompletionResults = GetLevelCompletionResults();
 
 			if (levelCompletionResults != null)
-			{
 				scoreManager.NotifyOfSongEnded(levelCompletionResults.modifiedScore);
-				ParseAllBSML();
 
+			if (IsMarkupReady())
+				PublishResults(levelCompletionResults);
+			else
+			{
+				ClearExistingText();
+				int sceneHandle = resultsViewController.gameObject.scene.handle;
+				pendingPublication = resultsViewController.StartCoroutine(PublishWhenReady(publicationRevision, sceneHandle, levelCompletionResults));
+			}
+		}
+
+		private void ResultsViewController_OnDeactivateEvent(bool removedFromHierarchy, bool screenSystemDisabling)
+		{
+			RetirePublication();
+		}
+
+		private void RetirePublication()
+		{
+			++publicationRevision;
+			if (pendingPublication != null && resultsViewController != null)
+				resultsViewController.StopCoroutine(pendingPublication);
+			pendingPublication = null;
+		}
+
+		private bool IsMarkupReady()
+		{
+			return (fcScoreText != null || ResultsMarkupPreparation.IsReady(ResourceNameFCScore))
+				&& (fcPercentText != null || ResultsMarkupPreparation.IsReady(ResourceNameFCPercentage));
+		}
+
+		private bool IsPublicationCurrent(int revision, int sceneHandle, LevelCompletionResults? completion)
+		{
+			return !disposed && revision == publicationRevision && resultsViewController != null
+				&& resultsViewController.isActivated && resultsViewController.gameObject.scene.isLoaded
+				&& resultsViewController.gameObject.scene.handle == sceneHandle
+				&& ReferenceEquals(completion, GetLevelCompletionResults());
+		}
+
+		private IEnumerator PublishWhenReady(int revision, int sceneHandle, LevelCompletionResults? completion)
+		{
+			yield return null;
+			while (IsPublicationCurrent(revision, sceneHandle, completion) && !IsMarkupReady())
+				yield return null;
+			if (revision == publicationRevision)
+				pendingPublication = null;
+			if (IsPublicationCurrent(revision, sceneHandle, completion))
+				PublishResults(completion);
+		}
+
+		private void PublishResults(LevelCompletionResults? levelCompletionResults)
+		{
+			ParseAllBSML();
+			if (levelCompletionResults != null)
+			{
 				if (levelCompletionResults.levelEndStateType == global::LevelCompletionResults.LevelEndStateType.Cleared)
 					SetResultsViewText();
 				else
@@ -81,9 +146,16 @@ namespace FCPercentage.FCPResults.HUD
 			}
 			else
 			{
-				ParseAllBSML();
 				EmptyResultsViewText();
 			}
+		}
+
+		private void ClearExistingText()
+		{
+			if (fcScoreText != null) fcScoreText.text = "";
+			if (fcScoreDiffText != null) fcScoreDiffText.text = "";
+			if (fcPercentText != null) fcPercentText.text = "";
+			if (fcPercentDiffText != null) fcPercentDiffText.text = "";
 		}
 
 		private void ParseAllBSML()
@@ -110,7 +182,10 @@ namespace FCPercentage.FCPResults.HUD
 
 		private void ParseBSML(string bsmlPath, GameObject parentGameObject)
 		{
-			BSMLParser.Instance.Parse(Utilities.GetResourceContent(Assembly.GetExecutingAssembly(), bsmlPath), parentGameObject, this);
+			if (ResultsMarkupPreparation.TryTake(bsmlPath, out XDocument? document))
+				BSMLParser.Instance.Parse(document!, parentGameObject, this);
+			else
+				BSMLParser.Instance.Parse(Utilities.GetResourceContent(Assembly.GetExecutingAssembly(), bsmlPath), parentGameObject, this);
 		}
 
 		internal void SetResultsViewText()

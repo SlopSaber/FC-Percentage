@@ -165,6 +165,7 @@
     <Compile Include="FCPCore\ScoreTracker.cs" />
     <Compile Include="FCPCounter\FCPercentageCounterPreview.cs" />
     <Compile Include="FCPResults\HUD\ResultsController.cs" />
+    <Compile Include="FCPResults\HUD\ResultsMarkupPreparation.cs" />
     <Compile Include="FCPResults\CalculationModels\UpdatedHighscoreDiffCalculationModel.cs" />
     <Compile Include="FCPResults\CalculationModels\OldHighscoreDiffCalculationModel.cs" />
     <Compile Include="FCPResults\ResultsTextFormattingModel.cs" />

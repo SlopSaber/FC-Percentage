@@ -28,6 +28,7 @@ namespace FCPercentage
 			zenject.UseMetadataBinder<Plugin>();
 
 			PluginConfig.Instance = conf.Generated<PluginConfig>();
+			ResultsMarkupPreparation.Prewarm();
 
 			// Install zenject stuff
 			zenject.Install(Location.App, (DiContainer Container) =>
