@@ -98,7 +98,7 @@ namespace FCPercentage.FCPCore
 
 			Highscore = stats.highScore;
 			HighscoreAtLevelStart = stats.highScore;
-			MaxScoreAtLevelStart = ScoreModel.ComputeMaxMultipliedScoreForBeatmap(transformedBeatmapData);
+			MaxScoreAtLevelStart = ScoreMetadataPreparation.Compute(transformedBeatmapData);
 
 			SaberAColor = "#" + ColorUtility.ToHtmlStringRGB(colorScheme.saberAColor);
 			SaberBColor = "#" + ColorUtility.ToHtmlStringRGB(colorScheme.saberBColor);

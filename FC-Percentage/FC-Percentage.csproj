@@ -46,6 +46,10 @@
     <DisableZipRelease>True</DisableZipRelease>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="0Harmony">
+      <Private>False</Private>
+      <HintPath>$(GameDirectory)\Libs\0Harmony.dll</HintPath>
+    </Reference>
     <Reference Include="BeatmapCore, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <Private>False</Private>
       <HintPath>$(GameDirectory)\Beat Saber_Data\Managed\BeatmapCore.dll</HintPath>
@@ -173,6 +177,7 @@
     <Compile Include="FCPCore\Configuration\PluginConfig.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="FCPCore\ScoreManager.cs" />
+    <Compile Include="FCPCore\ScoreMetadataPreparation.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="manifest.json" />
